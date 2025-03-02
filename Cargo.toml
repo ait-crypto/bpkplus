@@ -1,0 +1,24 @@
+[package]
+name = "nymgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"
+sha2 = { version = "0.10", default-features = false, features = ["std"] }
+ark-bls12-381 = { version = "0.5" }
+ark-ec = { version = "0.5", default-features = false }
+ark-ff = { version = "0.5", default-features = false }
+ark-serialize = { version = "0.5", default-features = false }
+rand_chacha = { version = "0.3" }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "nym"
+harness = false
+
+[profile.bench]
+lto = true
+opt-level = 3
