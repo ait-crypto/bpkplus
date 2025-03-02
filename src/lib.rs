@@ -318,15 +318,6 @@ impl UserSK {
         hash_gx(&mut hasher, &a_6);
         let c = hash_extract_scalar(hasher);
 
-        let s_1 = r_1 + c * alpha;
-        let s_2 = r_2 + c * (sinv * self.dh_sk);
-        let s_3 = r_3 + c * self.dh_sk;
-        let s_4 = r_4 + c * r;
-        let s_5_1 = r_5_1 + c * s;
-        let s_5_2 = r_5_2 + c * r;
-        let s_6_1 = r_6_1 + c * beta;
-        let s_6_2 = r_6_2 + c * -s;
-
         (
             nym,
             Proof {
@@ -337,19 +328,19 @@ impl UserSK {
                 t_prime_prime,
                 upk_prime,
                 a_1,
-                s_1,
+                s_1: r_1 + c * alpha,
                 a_2,
-                s_2,
+                s_2: r_2 + c * sinv * self.dh_sk,
                 a_3,
-                s_3,
+                s_3: r_3 + c * self.dh_sk,
                 a_4,
-                s_4,
+                s_4: r_4 + c * r,
                 a_5,
-                s_5_1,
-                s_5_2,
+                s_5_1: r_5_1 + c * s,
+                s_5_2: r_5_2 + c * r,
                 a_6,
-                s_6_1,
-                s_6_2,
+                s_6_1: r_6_1 + c * beta,
+                s_6_2: r_6_2 - c * s,
             },
         )
     }
