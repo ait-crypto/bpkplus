@@ -49,11 +49,11 @@ where
 {
     let pp = PP::default();
 
-    hash_gx(hasher, &pp.y);
+    hash_gx(hasher, &pp.groth.g);
+    hash_gx(hasher, &pp.groth.ghat);
+    hash_gx(hasher, &pp.groth.y);
     hash_gx(hasher, &pp.h);
     hash_gx(hasher, &pp.k);
-    hash_gx(hasher, &pp.g);
-    hash_gx(hasher, &pp.ghat);
 }
 
 fn hash_context() -> Hasher {
@@ -83,23 +83,38 @@ where
     }
 }
 
-pub struct PP {
+pub struct GrothPP {
     y: G1Projective,
-    h: G1Projective,
-    k: G1Projective,
     g: G1Projective,
     ghat: G2Projective,
 }
 
+impl Default for GrothPP {
+    fn default() -> Self {
+        let y = hash_with_domain_separation_1(b"y", b"Groth PP");
+        let g = hash_with_domain_separation_1(b"g", b"Groth PP");
+        let ghat = hash_with_domain_separation_2(b"ghat", b"Groth PP");
+
+        Self { y, g, ghat }
+    }
+}
+
+pub struct PP {
+    groth: GrothPP,
+    h: G1Projective,
+    k: G1Projective,
+}
+
 impl Default for PP {
     fn default() -> Self {
-        let y = hash_with_domain_separation_1(b"y", b"PP");
         let h = hash_with_domain_separation_1(b"h", b"PP");
         let k = hash_with_domain_separation_1(b"k", b"PP");
-        let g = hash_with_domain_separation_1(b"g", b"PP");
-        let ghat = hash_with_domain_separation_2(b"ghat", b"PP");
 
-        Self { y, h, k, g, ghat }
+        Self {
+            groth: GrothPP::default(),
+            h,
+            k,
+        }
     }
 }
 
@@ -118,14 +133,14 @@ pub struct GrothSignature {
 }
 
 impl GrothSK {
-    pub fn rand(pp: &PP) -> (Self, GrothPK) {
+    pub fn rand(pp: &GrothPP) -> (Self, GrothPK) {
         let mut rng = rand::thread_rng();
         let sk = Scalar::rand(&mut rng);
 
         (Self { sk }, GrothPK { pk: pp.ghat * sk })
     }
 
-    pub fn sign(&self, pp: &PP, msg: &G1Projective) -> GrothSignature {
+    pub fn sign(&self, pp: &GrothPP, msg: &G1Projective) -> GrothSignature {
         let mut rng = rand::thread_rng();
         let r = Scalar::rand(&mut rng);
         let rinv = r.inverse().unwrap();
@@ -150,7 +165,7 @@ impl GrothSignature {
 }
 
 impl GrothPK {
-    pub fn verify(&self, pp: &PP, msg: &G1Projective, sig: &GrothSignature) -> bool {
+    pub fn verify(&self, pp: &GrothPP, msg: &G1Projective, sig: &GrothSignature) -> bool {
         Bls12_381::pairing(sig.s, sig.rhat)
             == Bls12_381::pairing(pp.y, pp.ghat) + Bls12_381::pairing(pp.g, self.pk)
             && Bls12_381::pairing(sig.t, sig.rhat)
@@ -160,7 +175,7 @@ impl GrothPK {
 
 pub struct CentralAuthroitySK {
     sig_sk: GrothSK,
-    enc_sk: Scalar,
+    _enc_sk: Scalar,
 }
 
 pub struct CentralAuthorityPK {
@@ -170,13 +185,16 @@ pub struct CentralAuthorityPK {
 
 impl CentralAuthroitySK {
     pub fn rand(pp: &PP) -> (Self, CentralAuthorityPK) {
-        let (sk, pk) = GrothSK::rand(pp);
+        let (sk, pk) = GrothSK::rand(&pp.groth);
         let mut rng = rand::thread_rng();
         let enc_sk = Scalar::rand(&mut rng);
         let enc_pk = pp.k * enc_sk;
 
         (
-            Self { sig_sk: sk, enc_sk },
+            Self {
+                sig_sk: sk,
+                _enc_sk: enc_sk,
+            },
             CentralAuthorityPK { sig_pk: pk, enc_pk },
         )
     }
@@ -186,14 +204,14 @@ impl CentralAuthroitySK {
         let sk = Scalar::rand(&mut rng);
         let pk = pp.h * sk;
 
-        let sigma = self.sig_sk.sign(pp, &pk);
+        let sigma = self.sig_sk.sign(&pp.groth, &pk);
         (
             UserSK {
                 dh_sk: sk,
                 dh_pk: pk,
                 sigma,
             },
-            UserPK { dh_pk: pk },
+            UserPK { _dh_pk: pk },
         )
     }
 }
@@ -205,11 +223,11 @@ pub struct UserSK {
 }
 
 pub struct UserPK {
-    dh_pk: G1Projective,
+    _dh_pk: G1Projective,
 }
 
 pub struct ServiceProviderSK {
-    dh_sk: Scalar,
+    _dh_sk: Scalar,
 }
 
 pub struct ServiceProviderPK {
@@ -222,7 +240,7 @@ impl ServiceProviderSK {
         let dh_sk = Scalar::rand(&mut rng);
         let dh_pk = pp.k * dh_sk;
 
-        (Self { dh_sk }, ServiceProviderPK { dh_pk })
+        (Self { _dh_sk: dh_sk }, ServiceProviderPK { dh_pk })
     }
 }
 
@@ -277,6 +295,19 @@ impl UserSK {
         let sinv = s.inverse().unwrap();
         let upk_prime = self.dh_pk * sinv;
 
+        // hash the statement
+        let mut hasher = hash_context();
+        hash_gx(&mut hasher, &sppk.dh_pk);
+        hash_gx(&mut hasher, &mpk.enc_pk);
+        hash_gx(&mut hasher, &mpk.sig_pk.pk);
+        hash_gx(&mut hasher, &c_1);
+        hash_gx(&mut hasher, &c_2);
+        hash_gx(&mut hasher, &upk_prime);
+        hash_gx(&mut hasher, &r_hat_prime_prime);
+        hash_gx(&mut hasher, &s_prime_prime);
+        hash_gx(&mut hasher, &t_prime_prime);
+        hash_gx(&mut hasher, &nym);
+
         // e(s'', r'') ^ alpha = e(y, ghat) e(g, mpk_groth)
         let r_1 = Scalar::rand(&mut rng);
         let a_1 = Bls12_381::pairing(s_prime_prime * r_1, r_hat_prime_prime);
@@ -296,20 +327,11 @@ impl UserSK {
         // e(t'', r'')^\beta = e(y,mpk_groth) e(upk', ghat)^s => e(t'', r'')^\beta e(upk', ghat)^-s  = e(y,mpk_groth)
         let r_6_1 = Scalar::rand(&mut rng);
         let r_6_2 = Scalar::rand(&mut rng);
-        let a_6 = Bls12_381::pairing(t_prime_prime * r_6_1, r_hat_prime_prime)
-            + Bls12_381::pairing(upk_prime * r_6_2, pp.ghat);
+        let a_6 = Bls12_381::multi_pairing(
+            [t_prime_prime * r_6_1, upk_prime * r_6_2],
+            [r_hat_prime_prime, pp.groth.ghat],
+        );
 
-        let mut hasher = hash_context();
-        hash_gx(&mut hasher, &sppk.dh_pk);
-        hash_gx(&mut hasher, &mpk.enc_pk);
-        hash_gx(&mut hasher, &mpk.sig_pk.pk);
-        hash_gx(&mut hasher, &c_1);
-        hash_gx(&mut hasher, &c_2);
-        hash_gx(&mut hasher, &upk_prime);
-        hash_gx(&mut hasher, &r_hat_prime_prime);
-        hash_gx(&mut hasher, &s_prime_prime);
-        hash_gx(&mut hasher, &t_prime_prime);
-        hash_gx(&mut hasher, &nym);
         hash_gx(&mut hasher, &a_1);
         hash_gx(&mut hasher, &a_2);
         hash_gx(&mut hasher, &a_3);
@@ -371,11 +393,17 @@ pub fn verify(
     hash_gx(&mut hasher, &pi.a_5);
     hash_gx(&mut hasher, &pi.a_6);
     let c = hash_extract_scalar(hasher);
+    let minus_c = -c;
 
     // e(s'', r'') ^ alpha = e(y, ghat) e(g, mpk_groth)
-    let b_1 = Bls12_381::pairing(pi.s_prime_prime * pi.s_1, pi.r_hat_prime_prime)
-        == (Bls12_381::pairing(pp.y, pp.ghat) + Bls12_381::pairing(pp.g, mpk.sig_pk.pk)) * c
-            + pi.a_1;
+    let b_1 = Bls12_381::multi_pairing(
+        [
+            pi.s_prime_prime * pi.s_1,
+            pp.groth.y * minus_c,
+            pp.groth.g * minus_c,
+        ],
+        [pi.r_hat_prime_prime, pp.groth.ghat, mpk.sig_pk.pk],
+    ) == pi.a_1;
     // upk'^s = H^usk => upk' = H^(usk / s)
     let b_2 = pp.h * pi.s_2 == pi.upk_prime * c + pi.a_2;
     // nym = sppk^usk
@@ -385,9 +413,14 @@ pub fn verify(
     // c_2 = upks'^s mpk_elgamal^r
     let b_5 = pi.upk_prime * pi.s_5_1 + mpk.enc_pk * pi.s_5_2 == pi.c_2 * c + pi.a_5;
     // e(t'', r'')^\beta = e(y,mpk_groth) e(upk', ghat)^s => e(t'', r'')^\beta e(upk', ghat)^-s  = e(y,mpk_groth)
-    let b_6 = Bls12_381::pairing(pi.t_prime_prime * pi.s_6_1, pi.r_hat_prime_prime)
-        + Bls12_381::pairing(pi.upk_prime * pi.s_6_2, pp.ghat)
-        == Bls12_381::pairing(pp.y * c, mpk.sig_pk.pk) + pi.a_6;
+    let b_6 = Bls12_381::multi_pairing(
+        [
+            pi.t_prime_prime * pi.s_6_1,
+            pi.upk_prime * pi.s_6_2,
+            pp.groth.y * minus_c,
+        ],
+        [pi.r_hat_prime_prime, pp.groth.ghat, mpk.sig_pk.pk],
+    ) == pi.a_6;
 
     b_1 && b_2 && b_3 && b_4 && b_5 && b_6
 }
@@ -398,7 +431,7 @@ mod test {
 
     #[test]
     fn groth() {
-        let pp = PP::default();
+        let pp = GrothPP::default();
         let (sk, pk) = GrothSK::rand(&pp);
 
         let msg = hash_with_domain_separation_1(b"msg", b"");
