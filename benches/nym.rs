@@ -1,7 +1,7 @@
+use bpkplus::*;
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use nymgen::*;
 
-fn bench_nym(c: &mut Criterion) {
+fn bench_bpkplus(c: &mut Criterion) {
     let pp = PP::default();
 
     let (msk, mpk) = CentralAuthroitySK::rand(&pp);
@@ -18,5 +18,5 @@ fn bench_nym(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_nym);
+criterion_group!(benches, bpkplus);
 criterion_main!(benches);
