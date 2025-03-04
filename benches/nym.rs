@@ -18,5 +18,5 @@ fn bench_bpkplus(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bpkplus);
+criterion_group!(benches, bench_bpkplus);
 criterion_main!(benches);
