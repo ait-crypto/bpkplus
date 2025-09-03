@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rand = "0.8"
+rand = "0.9"
 sha2 = { version = "0.10", default-features = false, features = ["std"] }
 ark-bls12-381 = { version = "0.5" }
 ark-ec = { version = "0.5", default-features = false }
