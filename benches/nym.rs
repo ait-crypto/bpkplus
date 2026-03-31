@@ -1,5 +1,7 @@
+use std::hint::black_box;
+
 use bpkplus::*;
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_bpkplus(c: &mut Criterion) {
     let pp = PP::default();
