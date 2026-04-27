@@ -6,10 +6,10 @@ edition = "2024"
 [dependencies]
 rand = "0.8"
 sha2 = "0.11"
-ark-bls12-381 = { version = "0.5" }
-ark-ec = { version = "0.5", default-features = false }
-ark-ff = { version = "0.5", default-features = false }
-ark-serialize = { version = "0.5", default-features = false }
+ark-bls12-381 = { version = "0.6" }
+ark-ec = { version = "0.6", default-features = false }
+ark-ff = { version = "0.6", default-features = false }
+ark-serialize = { version = "0.6", default-features = false }
 rand_chacha = { version = "0.3" }
 
 [dev-dependencies]
